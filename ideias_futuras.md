@@ -90,7 +90,7 @@ Ref: clip.user_id > user.id
 └───────▲───────┘
         │
 ┌───────┴───────┐
-│  Service      │  ← Use cases / Services
+│  Service      │  ← Use cases / Services / Processors 
 │   Layer       │
 └───────▲───────┘
         │

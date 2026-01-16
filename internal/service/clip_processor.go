@@ -7,8 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"videodownloader/internal/entities"
-	"videodownloader/internal/repository"
+	"strconv"
+	"youclips/internal/entities"
+	"youclips/internal/repository"
 )
 
 type YTDLPProcessor struct {
@@ -33,6 +34,17 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 		return fmt.Errorf("failed to get video title: %w", err)
 	}
 	clip.Title = title
+
+	// Validate requested end time against actual video duration
+	duration, err := p.getVideoDuration(ctx, clip.OriginalURL)
+	if err != nil {
+		return fmt.Errorf("failed to get video duration: %w", err)
+	}
+	if clip.EndTime > duration {
+		clip.Status = entities.StatusFailed
+		_ = p.repo.Update(ctx, clip) // best effort update
+		return fmt.Errorf("requested end_time %d exceeds video duration %d", clip.EndTime, duration)
+	}
 
 	var outputPath string
 	var err2 error
@@ -62,15 +74,27 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 
 	return nil
 }
-
+func (*YTDLPProcessor) getVideoDuration(ctx context.Context, url string) (int, error) {
+	cmd := exec.CommandContext(ctx, "yt-dlp", "--get-duration", url)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	durationInt, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0, err
+	}
+	return durationInt, nil 
+	
+}
 func (p *YTDLPProcessor) getVideoTitle(ctx context.Context, url string) (string, error) {
 	cmd := exec.CommandContext(ctx, "yt-dlp", "--get-title", url)
 	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", err 
 	}
 	return strings.TrimSpace(string(output)), nil
-}
+	}
 
 func (p *YTDLPProcessor) downloadVideo(ctx context.Context, clip *entities.Clip) (string, error) {
 	filename := fmt.Sprintf("clip_%d.mp4", clip.ID)

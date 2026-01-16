@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"time"
-	"videodownloader/internal/entities"
+	"youclips/internal/entities"
 )
 
 type ClipRepository interface {

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"videodownloader/internal/entities"
-	"videodownloader/internal/service"
+	"youclips/internal/entities"
+	"youclips/internal/service"
 )
 
 type ClipHandler struct {
@@ -162,12 +162,20 @@ func (h *ClipHandler) downloadClip(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", clip.FilePath))
+	filename := "untitled"
+	if clip.Title != "" {
+		filename = clip.Title
+	}
+
+	var extension string
 	if clip.Format == entities.FormatVideo {
+		extension = ".mp4"
 		w.Header().Set("Content-Type", "video/mp4")
 	} else {
+		extension = ".mp3"
 		w.Header().Set("Content-Type", "audio/mpeg")
 	}
 
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s%s\"", filename, extension))
 	http.ServeFile(w, r, clip.FilePath)
 }

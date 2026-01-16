@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"videodownloader/internal/entities"
-	"videodownloader/internal/repository"
+	"youclips/internal/entities"
+	"youclips/internal/repository"
 )
 
 type ClipService struct {
@@ -14,7 +14,7 @@ type ClipService struct {
 
 type ClipProcessor interface {
 	ProcessClip(ctx context.Context, clip *entities.Clip) error
-}
+ }
 
 func NewClipService(repo repository.ClipRepository, processor ClipProcessor) *ClipService {
 	return &ClipService{

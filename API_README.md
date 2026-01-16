@@ -1,4 +1,4 @@
-# Video Downloader API
+# YouClips API
 
 API para criar clips de vídeos do YouTube.
 

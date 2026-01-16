@@ -1,4 +1,4 @@
-Video Downloader - Parte 1
+YouClips - Parte 1
 
 Servidor Go com endpoint POST /clips para criar pedidos de clip.
 

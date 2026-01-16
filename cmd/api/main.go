@@ -7,15 +7,21 @@ import (
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
-	"videodownloader/internal/controller"
-	"videodownloader/internal/repository"
-	"videodownloader/internal/service"
+	"youclips/internal/controller"
+	"youclips/internal/repository"
+	"youclips/internal/service"
+)
+
+const (
+	defaultDBPath     = "./youclips.db"
+	defaultStorageDir = "./storage/clips"
+	SERVER_ADDR    		= ":8080"
 )
 
 func main() {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "./videodownloader.db"
+		dbPath = defaultDBPath
 	}
 
 	db, err := sql.Open("sqlite3", dbPath)
@@ -30,7 +36,7 @@ func main() {
 
 	storageDir := os.Getenv("STORAGE_DIR")
 	if storageDir == "" {
-		storageDir = "./storage/clips"
+		storageDir = defaultStorageDir
 	}
 
 	clipRepo := repository.NewSQLiteClipRepository(db)
@@ -42,7 +48,7 @@ func main() {
 	http.HandleFunc("/clips/", clipHandler.ClipByID)
 
 	log.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(SERVER_ADDR, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
