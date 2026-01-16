@@ -1,0 +1,19 @@
+# Build outputs
+bin/
+
+# Databases and storage
+youclips.db
+videodownloader.db
+storage/clips/
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs and temp
+*.log
+*.tmp
+
+# Environment/config
+.env
