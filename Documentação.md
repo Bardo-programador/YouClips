@@ -22,8 +22,8 @@
 
 - Backend: Go por motivos de aprendizados e devido a sua capacidade de concorrência.
 - Frontend: a decidir
-- Banco de dados: PostgresSQL em container 
-- Processamento de vídeo yt-dlp e FFmpeg
+- Banco de dados: SQLite  
+- Processamento de vídeo yt-dlp
 
 ## Modelagem relacional (Simplificada para MVP)
 
@@ -72,11 +72,11 @@ enum clip_status {
 │ Entities      │  ← Constants and other defitinions (like Models)
 └───────────────┘
 
-Processamento assíncrono: API → Queue → Workers → yt-dlp / FFmpeg
+Processamento assíncrono: API → Queue → Workers → yt-dlp 
 
 ## Armazenamento
 
-- Clips salvos localmente no diretório atual
+- Clips salvos localmente 
 - Política de limpeza: sem remoção automática
 
 ## Endpoints (MVP)
