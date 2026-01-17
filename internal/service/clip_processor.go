@@ -45,7 +45,6 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 		_ = p.repo.Update(ctx, clip) // best effort update
 		return fmt.Errorf("requested end_time %d exceeds video duration %d", clip.EndTime, duration)
 	}
-
 	var outputPath string
 	var err2 error
 
@@ -54,16 +53,13 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 	} else {
 		outputPath, err2 = p.downloadAudio(ctx, clip)
 	}
-
 	if err2 != nil {
 		return fmt.Errorf("failed to download clip: %w", err2)
 	}
-
 	fileInfo, err := os.Stat(outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to get file info: %w", err)
 	}
-
 	clip.FilePath = outputPath
 	clip.Size = fileInfo.Size()
 	clip.Status = entities.StatusCompleted
@@ -71,7 +67,6 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 	if err := p.repo.Update(ctx, clip); err != nil {
 		return fmt.Errorf("failed to update clip: %w", err)
 	}
-
 	return nil
 }
 func (*YTDLPProcessor) getVideoDuration(ctx context.Context, url string) (int, error) {
@@ -80,11 +75,26 @@ func (*YTDLPProcessor) getVideoDuration(ctx context.Context, url string) (int, e
 	if err != nil {
 		return 0, err
 	}
-	durationInt, err := strconv.Atoi(strings.TrimSpace(string(output)))
-	if err != nil {
-		return 0, err
+	
+	time := strings.Split(strings.TrimSpace(string(output)), ":")
+	
+	switch len(time) {
+	case 3:
+		hours, _ := strconv.Atoi(time[0])
+		minutes, _ := strconv.Atoi(time[1])
+		seconds, _ := strconv.Atoi(time[2])
+		return hours*3600 + minutes*60 + seconds, nil
+	case 2:
+		minutes, _ := strconv.Atoi(time[0])
+		seconds, _ := strconv.Atoi(time[1])
+		return minutes*60 + seconds, nil
+	case 1:
+		seconds, _ := strconv.Atoi(time[0])
+		return seconds, nil
+	default:
+		return 0, fmt.Errorf("invalid duration format")
 	}
-	return durationInt, nil 
+
 	
 }
 func (p *YTDLPProcessor) getVideoTitle(ctx context.Context, url string) (string, error) {
@@ -99,9 +109,9 @@ func (p *YTDLPProcessor) getVideoTitle(ctx context.Context, url string) (string,
 func (p *YTDLPProcessor) downloadVideo(ctx context.Context, clip *entities.Clip) (string, error) {
 	filename := fmt.Sprintf("clip_%d.mp4", clip.ID)
 	outputPath := filepath.Join(p.storageDir, filename)
-
 	args := []string{
-		"-f", "best[ext=mp4]",
+		"-f", "bv*+ba*[ext=m4a]/b[ext=mp4]",
+		"--merge-output-format", "mp4",
 		"--download-sections", fmt.Sprintf("*%d-%d", clip.StartTime, clip.EndTime),
 		"-o", outputPath,
 		clip.OriginalURL,
