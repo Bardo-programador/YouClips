@@ -108,5 +108,5 @@ Lista clips com paginação.
 │   ├── repository/       # Acesso ao banco
 │   └── service/          # Lógica de negócio
 ├── storage/clips/        # Clips salvos
-└── videodownloader.db    # Banco SQLite
+└── youclips.db           # Banco SQLite
 ```
