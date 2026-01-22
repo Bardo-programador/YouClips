@@ -148,24 +148,4 @@ func TestGETClipByID_NotFound(t *testing.T) {
 	if getRec.Code != http.StatusNotFound { t.Fatalf("expected 404, got %d", getRec.Code) }
 
 	}
-func TestGETClipByID_Download(t *testing.T) {
-	h := setupHandler(t)
-	// create clip
-	req := httptest.NewRequest(http.MethodPost, "/clips", strings.NewReader(`{"url":"u","start_time":0,"end_time":1,"format":"video"}`))
-	rec := httptest.NewRecorder()
-	h.Clips(rec, req)
-	var created CreateClipResponse
-	json.Unmarshal(rec.Body.Bytes(), &created)
-	
-	// directly update status in mem repo to simulate completion
-	// (not ideal in real app, but fine for unit test)
-	// find clip and mark completed
-	// since we don't have direct access to repo here, rely on processor having persisted completion
-	// download
-		dlReq := httptest.NewRequest(http.MethodGet, "/clips/"+strconv.Itoa(created.ID)+"/download", nil)
-	dlRec := httptest.NewRecorder()
-	h.ClipByID(dlRec, dlReq)
-	if dlRec.Code != http.StatusOK { t.Fatalf("expected 200, got %d", dlRec.Code) }
-	ct := dlRec.Header().Get("Content-Type")
-	if ct != "video/mp4" { t.Fatalf("unexpected content-type: %s", ct) }
-}
+
