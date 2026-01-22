@@ -168,10 +168,11 @@ func (h *ClipHandler) downloadClip(w http.ResponseWriter, r *http.Request, id in
 	}
 
 	var extension string
-	if clip.Format == entities.FormatVideo {
+	switch clip.Format{
+	case entities.FormatVideo:
 		extension = ".mp4"
 		w.Header().Set("Content-Type", "video/mp4")
-	} else {
+	case entities.FormatAudio:
 		extension = ".mp3"
 		w.Header().Set("Content-Type", "audio/mpeg")
 	}
