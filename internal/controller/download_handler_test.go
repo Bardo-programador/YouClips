@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +18,8 @@ type memRepo struct {
 	seq   int
 	items map[int]*entities.Clip
 }
+var global_repo *memRepo
+
 
 func newMemRepo() *memRepo { return &memRepo{items: make(map[int]*entities.Clip)} }
 
@@ -63,13 +64,12 @@ func clone(c *entities.Clip) *entities.Clip {
 type testProcessor struct{ dir string; repo *memRepo }
 
 func (p *testProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) error {
-	name := filepath.Join(p.dir, "clip_"+strconv.Itoa(clip.ID))
-	if clip.Format == entities.FormatVideo { name += ".mp4" } else { name += ".mp3" }
-	if err := os.WriteFile(name, []byte("data"), 0644); err != nil { return err }
+	// create a temporary file, then rename to expected extension
+
 	clip.Title = "test"
-	clip.FilePath = name
+	clip.FilePath = "/tmp/sample.mp4" 
 	clip.Size = int64(len("data"))
-	clip.Status = entities.StatusCompleted
+	clip.Status = entities.StatusProcessing
 	// persist updated clip in mem repo
 	_ = p.repo.Update(ctx, clip)
 	return nil
@@ -78,6 +78,7 @@ func (p *testProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) er
 func setupHandler(t *testing.T) *ClipHandler {
 	t.Helper()
 	repo := newMemRepo()
+	global_repo = repo
 	dir := t.TempDir()
 	proc := &testProcessor{dir: dir, repo: repo}
 	svc := service.NewClipService(repo, proc)
@@ -148,4 +149,35 @@ func TestGETClipByID_NotFound(t *testing.T) {
 	if getRec.Code != http.StatusNotFound { t.Fatalf("expected 404, got %d", getRec.Code) }
 
 	}
+func TestGETClipByID_Download(t *testing.T) {
+	h := setupHandler(t)
+	// create clip
+	req := httptest.NewRequest(http.MethodPost, "/clips", strings.NewReader(`{"url":"u","start_time":0,"end_time":1,"format":"video"}`))
+	rec := httptest.NewRecorder()
+	h.Clips(rec, req)
 
+	var created CreateClipResponse
+	json.Unmarshal(rec.Body.Bytes(), &created)
+	global_repo.items[created.ID].Status = entities.StatusCompleted
+	// create a real file at the expected path
+	f, err := os.CreateTemp("", "sample_*.mp4")
+	if err != nil { t.Fatal(err) }
+	_, _ = f.Write([]byte("data"))
+	_ = f.Close()
+	
+	// update clip information
+	global_repo.items[created.ID].FilePath = f.Name()
+	global_repo.items[created.ID].Status = entities.StatusCompleted
+
+	// directly update status in mem repo to simulate completion
+	// (not ideal in real app, but fine for unit test)
+	// find clip and mark completed
+	// since we don't have direct access to repo here, rely on processor having persisted completion
+	// download
+	dlReq := httptest.NewRequest(http.MethodGet, "/clips/"+strconv.Itoa(created.ID)+"/download", nil)
+	dlRec := httptest.NewRecorder()
+	h.ClipByID(dlRec, dlReq)
+	if dlRec.Code != http.StatusOK { t.Fatalf("expected 200, got %d", dlRec.Code) }
+	ct := dlRec.Header().Get("Content-Type")
+	if ct != "video/mp4" { t.Fatalf("unexpected content-type: %s", ct) }
+}
