@@ -144,3 +144,20 @@ func (p *YTDLPProcessor) downloadAudio(ctx context.Context, clip *entities.Clip)
 
 	return outputPath, nil
 }
+
+func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error) {
+	title, err := p.getVideoTitle(ctx, url)
+	if err != nil {
+	return nil, fmt.Errorf("failed to get video title: %w", err)
+	}
+
+	duration, err := p.getVideoDuration(ctx, url)
+	if err != nil {
+	return nil, fmt.Errorf("failed to get video duration: %w", err)
+	}
+
+	return &entities.VideoMetadataResponse{
+	Title:    title,
+	Duration: duration,
+	}, nil
+}

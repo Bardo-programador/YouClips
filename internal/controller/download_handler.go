@@ -57,7 +57,7 @@ func (h *ClipHandler) ClipByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClipHandler) createClip(w http.ResponseWriter, r *http.Request) {
-	var req CreateClipRequest
+	var req entities.CreateClipRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -79,7 +79,7 @@ func (h *ClipHandler) createClip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := CreateClipResponse{
+	response := entities.CreateClipResponse{
 		ID:     clip.ID,
 		Status: string(clip.Status),
 	}
@@ -96,7 +96,7 @@ func (h *ClipHandler) getClip(w http.ResponseWriter, r *http.Request, id int) {
 		return
 	}
 
-	response := ClipResponse{
+	response := entities.ClipResponse{
 		ID:       clip.ID,
 		Status:   string(clip.Status),
 		Title:    clip.Title,
@@ -122,9 +122,9 @@ func (h *ClipHandler) listClips(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clipResponses := make([]*ClipResponse, len(clips))
+	clipResponses := make([]*entities.ClipResponse, len(clips))
 	for i, clip := range clips {
-		clipResponses[i] = &ClipResponse{
+		clipResponses[i] = &entities.ClipResponse{
 			ID:       clip.ID,
 			Status:   string(clip.Status),
 			Title:    clip.Title,
@@ -140,7 +140,7 @@ func (h *ClipHandler) listClips(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 
-	response := ListClipsResponse{
+	response := entities.ListClipsResponse{
 		Clips: clipResponses,
 		Total: total,
 		Page:  page,
@@ -179,4 +179,36 @@ func (h *ClipHandler) downloadClip(w http.ResponseWriter, r *http.Request, id in
 
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s%s\"", filename, extension))
 	http.ServeFile(w, r, clip.FilePath)
+}
+
+func (h *ClipHandler) GetVideoMetadata(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req entities.VideoMetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL == "" {
+		http.Error(w, "URL is required", http.StatusBadRequest)
+		return
+	}
+
+	metadata, err := h.service.GetVideoMetadata(r.Context(), req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	response := entities.VideoMetadataResponse{
+		Title:    metadata.Title,
+		Duration: metadata.Duration,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

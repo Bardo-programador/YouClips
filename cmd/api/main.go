@@ -46,6 +46,7 @@ func main() {
 
 	http.HandleFunc("/clips", clipHandler.Clips)
 	http.HandleFunc("/clips/", clipHandler.ClipByID)
+	http.HandleFunc("/metadata", clipHandler.GetVideoMetadata)
 
 	log.Println("Server starting on :8080")
 	if err := http.ListenAndServe(SERVER_ADDR, nil); err != nil {

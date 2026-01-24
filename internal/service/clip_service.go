@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"youclips/internal/entities"
 	"youclips/internal/repository"
+	
 )
 
 type ClipService struct {
@@ -14,7 +15,10 @@ type ClipService struct {
 
 type ClipProcessor interface {
 	ProcessClip(ctx context.Context, clip *entities.Clip) error
- }
+	GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error)
+}
+
+
 
 func NewClipService(repo repository.ClipRepository, processor ClipProcessor) *ClipService {
 	return &ClipService{
@@ -82,4 +86,8 @@ func (s *ClipService) ListClips(ctx context.Context, page, limit int) ([]*entiti
 	}
 
 	return clips, total, nil
+}
+
+func (s *ClipService) GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error) {
+	return s.processor.GetVideoMetadata(ctx, url)
 }
