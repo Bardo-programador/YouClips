@@ -1,4 +1,4 @@
-package controller
+package entities
 
 type CreateClipRequest struct {
 	URL       string `json:"url"`
@@ -25,4 +25,13 @@ type ListClipsResponse struct {
 	Clips []*ClipResponse `json:"clips"`
 	Total int             `json:"total"`
 	Page  int             `json:"page"`
+}
+
+type VideoMetadataRequest struct {
+	URL string `json:"url"`
+}
+
+type VideoMetadataResponse struct {
+	Title    string `json:"title"`
+	Duration int    `json:"duration"`
 }
