@@ -35,3 +35,9 @@ type VideoMetadataResponse struct {
 	Title    string `json:"title"`
 	Duration int    `json:"duration"`
 }
+
+type DeleteClipResponse struct {
+	Deleted 	bool `json:"deleted"`
+	ID				int  `json:"id"`
+}
+

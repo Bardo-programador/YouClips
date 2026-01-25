@@ -44,18 +44,37 @@ func (h *ClipHandler) ClipByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(parts) == 2 && parts[1] == "download" {
+	if len(parts) == 2 && parts[1] == "download" && r.Method == http.MethodGet {
 		h.downloadClip(w, r, id)
 		return
 	}
-
-	if r.Method == http.MethodGet {
+	
+	switch r.Method {
+	case http.MethodGet:
 		h.getClip(w, r, id)
-	} else {
+	case http.MethodDelete:
+		h.deleteClip(w, r, id)
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
+func (h *ClipHandler) deleteClip(w http.ResponseWriter, r *http.Request, id int) {
+
+	deleted, err := h.service.DeleteClip(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	response := entities.DeleteClipResponse{
+		Deleted: deleted,
+		ID:      id,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
 func (h *ClipHandler) createClip(w http.ResponseWriter, r *http.Request) {
 	var req entities.CreateClipRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

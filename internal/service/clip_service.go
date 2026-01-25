@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"youclips/internal/entities"
 	"youclips/internal/repository"
-	
+	"os"
 )
 
 type ClipService struct {
@@ -90,4 +90,25 @@ func (s *ClipService) ListClips(ctx context.Context, page, limit int) ([]*entiti
 
 func (s *ClipService) GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error) {
 	return s.processor.GetVideoMetadata(ctx, url)
+}
+
+func (s *ClipService) DeleteClip(ctx context.Context, id int) (bool, error) {
+
+	clip, err := s.repo.GetByID(ctx, id)
+	if err != nil || clip == nil {
+		return false, fmt.Errorf("failed to get clip: %w", err)
+	}
+
+	deleted, err := s.repo.Delete(ctx, id)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete clip: %w", err)
+	}
+	 
+	if deleted && clip.FilePath != "" {
+		if err := os.Remove(clip.FilePath); err != nil {
+			return false, fmt.Errorf("failed to delete clip file: %w", err)
+		}
+
+	}
+	return deleted, nil
 }

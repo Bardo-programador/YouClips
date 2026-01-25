@@ -14,6 +14,7 @@ type ClipRepository interface {
 	Count(ctx context.Context) (int, error)
 	UpdateStatus(ctx context.Context, id int, status entities.ClipStatus) error
 	Update(ctx context.Context, clip *entities.Clip) error
+	Delete(ctx context.Context, id int) (bool, error)
 }
 
 type SQLiteClipRepository struct {
@@ -149,3 +150,16 @@ func (r *SQLiteClipRepository) Update(ctx context.Context, clip *entities.Clip) 
 	)
 	return err
 }
+
+func (r *SQLiteClipRepository) Delete(ctx context.Context, id int) (bool, error) {
+	query := `DELETE FROM clips WHERE id = ?`
+	result, err := r.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return false, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rowsAffected > 0, nil
+} 
