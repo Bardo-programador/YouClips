@@ -133,6 +133,22 @@ Lista clips com paginação.
 }
 ```
 
+### DELETE /clips/{id}
+Apaga um clip permanentemente (remove arquivo do disco e registro do banco).
+
+**Response:**
+```json
+{
+  "deleted": true
+}
+```
+
+**Notas:**
+- Remove o arquivo físico do disco (storage/clips/)
+- Remove o registro do banco de dados
+- Operação irreversível
+- Retorna 404 se o clip não existir
+
 ## Status dos Clips
 
 Os clips podem ter os seguintes status:
@@ -177,12 +193,20 @@ cd web
 npm run dev
 ```
 
-O frontend estará disponível em `http://localhost:5173` e fará proxy para a API em `localhost:8080`.
+O frontend estará disponível em `http://localhost:5173` e fará proxy das requisições `/api/*` para a API em `localhost:8080`.
 
 **Rotas disponíveis:**
 - `/` - Criar novo clip
 - `/clips` - Listar todos os clips
 - `/clips/[id]` - Detalhes de um clip específico
+
+**Funcionalidades:**
+- Buscar metadados do vídeo antes de criar clip
+- Criar clips de vídeo ou áudio
+- Proteção contra duplicação de clips (botão desabilitado durante criação)
+- Listar clips com auto-refresh para clips em processamento
+- Download de clips concluídos
+- Apagar clips com confirmação
 
 Ver `web/ESTRUTURA.md` para documentação completa do frontend.
 
@@ -215,6 +239,11 @@ curl http://localhost:8080/clips/1
 ### Listar todos os clips
 ```bash
 curl http://localhost:8080/clips?page=1&limit=10
+```
+
+### Apagar um clip
+```bash
+curl -X DELETE http://localhost:8080/clips/1
 ```
 
 ### Baixar clip

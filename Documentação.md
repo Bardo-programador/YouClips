@@ -3,6 +3,7 @@
 - Baixar vídeos e áudios do Youtube como clips
 - Criar clips de qualquer duração
 - Baixar clips criados
+- Apagar clips (arquivo e registro no banco)
 
 
 
@@ -17,11 +18,12 @@
 4. Usuário clica em "Criar Clip"
 5. Sistema processa o clip
 6. Clip fica disponível para download
+7. Usuário pode apagar clips que não deseja mais
 
 ## Tecnologias adotadas
 
 - Backend: Go por motivos de aprendizados e devido a sua capacidade de concorrência.
-- Frontend: a decidir
+- Frontend: SvelteKit + TailwindCSS
 - Banco de dados: SQLite  
 - Processamento de vídeo yt-dlp
 
@@ -53,19 +55,19 @@ enum clip_status {
 ┌───────────────┐
 │   Frontend    │
 └───────▲───────┘
-        │ HTTP (REST)
+        │ HTTP (REST) - /api/*
 ┌───────┴───────┐
 │Controller     │  ← Controllers / Handlers
 └───────▲───────┘
         │
 ┌───────┴───────┐
 │  Service      │  ← Use cases / Services / Processors 
-│   Layer       │
+│   Layer       │  (Responsável por deletar arquivos)
 └───────▲───────┘
         │
 ┌───────┴───────┐
 │  Repository   │  ← Persistency
-│   Layer       │
+│   Layer       │  (Apenas opera no banco de dados)
 └───────▲───────┘
         │
 ┌───────┴───────┐
@@ -76,8 +78,8 @@ Processamento assíncrono: API → Queue → Workers → yt-dlp
 
 ## Armazenamento
 
-- Clips salvos localmente 
-- Política de limpeza: sem remoção automática
+- Clips salvos localmente em `storage/clips/`
+- Política de limpeza: remoção manual via endpoint DELETE
 
 ## Endpoints (MVP)
 
@@ -101,3 +103,13 @@ Processamento assíncrono: API → Queue → Workers → yt-dlp
 - Query params: `?page=1&limit=20`
 - Response: `{ "clips": [], "total": int, "page": int }`  
 
+**DELETE /clips/{id}**
+- Apaga um clip (remove arquivo do disco e registro do banco)
+- Response: `{ "deleted": bool }`
+
+### Metadata
+
+**POST /metadata**
+- Obtém metadados do vídeo (título e duração)
+- Body: `{ "url": string }`
+- Response: `{ "title": string, "duration": int }`

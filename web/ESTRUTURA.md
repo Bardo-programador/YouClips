@@ -172,10 +172,11 @@ Permite ao usuário criar um novo clip de vídeo do YouTube.
 5. Cria o clip
 
 **Funcionalidades:**
-- Busca metadados via `POST /metadata`
+- Busca metadados via `POST /api/metadata`
 - Exibe título e duração do vídeo em formato HH:MM:SS
 - Dual sliders com validação automática (início sempre < fim)
 - Mostra duração do clip selecionado em tempo real
+- **Proteção contra duplicação**: Botão desabilitado durante processamento
 - Feedback visual de loading e erros
 - Link para "Ver Clips" no header
 
@@ -189,8 +190,10 @@ Exibe todos os clips criados pelo usuário.
 - Mostra status com cores (verde/amarelo/vermelho)
 - Exibe título, duração e tamanho
 - Botão de download para clips concluídos
+- **Botão de apagar clip** com confirmação e loading state
 - Link para página de detalhes de cada clip
 - **Auto-refresh a cada 5 segundos** se houver clips processando
+- Atualização automática da lista após apagar clip
 - Mensagem amigável quando não há clips
 - Contador total de clips
 
@@ -203,6 +206,8 @@ Página de detalhes de um clip específico.
 - Mostra informações completas do clip
 - Status visual com indicador de progresso
 - Botão de download grande quando concluído
+- **Botão de apagar clip** no header com confirmação
+- Redireciona para lista após apagar
 - **Auto-refresh a cada 3 segundos** enquanto processa
 - Mensagens contextuais por status (processando/falhou/pronto)
 - Link para voltar à lista
@@ -251,9 +256,9 @@ Traduz status para português.
 
 ### Endpoints utilizados
 
-**`POST /metadata`** - Buscar metadados do vídeo
+**`POST /api/metadata`** - Buscar metadados do vídeo
 ```typescript
-fetch('/metadata', {
+fetch('/api/metadata', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://youtube.com/...' })
@@ -261,9 +266,9 @@ fetch('/metadata', {
 // Resposta: { title: "...", duration: 213 }
 ```
 
-**`POST /clips`** - Criar novo clip
+**`POST /api/clips`** - Criar novo clip
 ```typescript
-fetch('/clips', {
+fetch('/api/clips', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -276,9 +281,9 @@ fetch('/clips', {
 // Resposta: { id: 1, status: "processing" }
 ```
 
-**`GET /clips?page=1&limit=20`** - Listar clips
+**`GET /api/clips?page=1&limit=20`** - Listar clips
 ```typescript
-fetch('/clips?page=1&limit=20');
+fetch('/api/clips?page=1&limit=20');
 // Resposta: {
 //   clips: [...],
 //   total: 50,
@@ -286,9 +291,9 @@ fetch('/clips?page=1&limit=20');
 // }
 ```
 
-**`GET /clips/{id}`** - Obter detalhes do clip
+**`GET /api/clips/{id}`** - Obter detalhes do clip
 ```typescript
-fetch('/clips/1');
+fetch('/api/clips/1');
 // Resposta: {
 //   id: 1,
 //   status: "completed",
@@ -299,6 +304,14 @@ fetch('/clips/1');
 // }
 ```
 
+**`DELETE /api/clips/{id}`** - Apagar clip
+```typescript
+fetch('/api/clips/1', {
+  method: 'DELETE'
+});
+// Resposta: { deleted: true }
+```
+
 **`GET /clips/{id}/download`** - Baixar arquivo do clip
 ```html
 <a href="/clips/1/download" download>Download</a>
@@ -306,19 +319,25 @@ fetch('/clips/1');
 
 ### Proxy configurado
 
-O Vite está configurado para fazer proxy das requisições:
+O Vite está configurado para fazer proxy das requisições `/api/*`:
 
 ```typescript
 // vite.config.ts
 server: {
   proxy: {
-    '/clips': { target: 'http://localhost:8080' },
-    '/metadata': { target: 'http://localhost:8080' }
+    '/api': {
+      target: 'http://localhost:8080',
+      changeOrigin: true,
+      rewrite: (path) => path.replace(/^\/api/, '')
+    }
   }
 }
 ```
 
-Isso permite que o frontend em `localhost:5173` faça requisições para a API em `localhost:8080` sem problemas de CORS.
+Isso permite que:
+- O frontend em `localhost:5173` faça requisições sem CORS
+- As rotas do SvelteKit (`/clips`) não conflitem com a API
+- Requisições `/api/clips` sejam reescritas para `/clips` no backend
 
 ---
 
@@ -328,19 +347,34 @@ Isso permite que o frontend em `localhost:5173` faça requisições para a API e
 Implementado em `src/routes/clips/+page.svelte`
 - Lista todos os clips com paginação
 - Auto-refresh a cada 5 segundos para clips processando
-- Botões de download e detalhes
+- Botões de download, detalhes e apagar
+- Confirmação antes de apagar
 
 ### 2. ✅ Página de detalhes do clip
 Implementado em `src/routes/clips/[id]/+page.svelte`
 - Exibe informações completas do clip
 - Auto-refresh a cada 3 segundos durante processamento
 - Botão de download grande quando concluído
+- Botão de apagar no header com redirecionamento
 
 ### 3. ✅ Busca de metadados de vídeo
 Implementado na página inicial (`src/routes/+page.svelte`)
-- Endpoint `POST /metadata` integrado
+- Endpoint `POST /api/metadata` integrado
 - Dual range sliders para seleção de intervalo
 - Formatação de tempo HH:MM:SS
+
+### 4. ✅ Proteção contra duplicação de clips
+Implementado na página inicial
+- Botão de criar clip desabilitado durante processamento
+- Previne múltiplos cliques acidentais
+
+### 5. ✅ Funcionalidade de apagar clips
+Implementado em ambas páginas de clips
+- DELETE em `src/routes/clips/+page.svelte` (lista)
+- DELETE em `src/routes/clips/[id]/+page.svelte` (detalhes)
+- Confirmação antes da ação
+- Feedback visual durante operação
+- Atualização automática da interface
 
 ---
 
