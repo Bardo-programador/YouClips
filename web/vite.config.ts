@@ -6,13 +6,10 @@ export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
 		proxy: {
-			'/clips': {
+			'/api': {
 				target: 'http://localhost:8080',
-				changeOrigin: true
-			},
-			'/metadata': {
-				target: 'http://localhost:8080',
-				changeOrigin: true
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api/, '')
 			}
 		}
 	}

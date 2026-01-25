@@ -28,7 +28,7 @@
 		metadata = null;
 
 		try {
-			const response = await fetch('/metadata', {
+			const response = await fetch('/api/metadata', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ url })
@@ -48,12 +48,14 @@
 	}
 
 	async function createClip() {
+		if (loading) return; // Previne cliques múltiplos
+		
 		loading = true;
 		error = '';
 		result = null;
 
 		try {
-			const response = await fetch('/clips', {
+			const response = await fetch('/api/clips', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ url, start_time: startTime, end_time: endTime, format })
