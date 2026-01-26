@@ -178,7 +178,7 @@
 						<div class="flex gap-2">
 							{#if clip.status === 'completed' && clip.download_url}
 								<a
-									href={clip.download_url}
+									href={clip.download_url.replace('/clips/', '/api/clips/')}
 									download
 									class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
 								>

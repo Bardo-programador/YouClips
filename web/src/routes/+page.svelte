@@ -123,7 +123,14 @@
 							<span>Início: {formatTime(startTime)}</span>
 							<span>Fim: {formatTime(endTime)}</span>
 						</div>
-						<div class="space-y-2">
+						<div class="relative h-2 bg-gray-200 rounded-full mt-6 mb-6">
+							<!-- Track highlight -->
+							<div 
+								class="absolute h-full bg-blue-600 rounded-full"
+								style="left: {(startTime / metadata.duration) * 100}%; right: {100 - (endTime / metadata.duration) * 100}%;"
+							></div>
+							
+							<!-- Start thumb -->
 							<input
 								type="range"
 								min="0"
@@ -134,8 +141,10 @@
 										endTime = Math.min(startTime + 1, metadata.duration);
 									}
 								}}
-								class="w-full"
+								class="absolute w-full h-2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-moz-range-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
 							/>
+							
+							<!-- End thumb -->
 							<input
 								type="range"
 								min="0"
@@ -146,7 +155,7 @@
 										startTime = Math.max(endTime - 1, 0);
 									}
 								}}
-								class="w-full"
+								class="absolute w-full h-2 appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-moz-range-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-0"
 							/>
 						</div>
 						<div class="text-sm text-gray-600 text-center mt-2">

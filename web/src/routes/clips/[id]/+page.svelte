@@ -178,7 +178,7 @@
 
 				{#if clip.status === 'completed' && clip.download_url}
 					<a
-						href={clip.download_url}
+						href={clip.download_url.replace('/clips/', '/api/clips/')}
 						download
 						class="w-full block text-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
 					>
