@@ -126,14 +126,18 @@ func (p *YTDLPProcessor) downloadVideo(ctx context.Context, clip *entities.Clip)
 }
 
 func (p *YTDLPProcessor) downloadAudio(ctx context.Context, clip *entities.Clip) (string, error) {
+	tempVideoFile := fmt.Sprintf("clip_%d_temp.mp4", clip.ID)
+	tempVideoPath := filepath.Join(p.storageDir, tempVideoFile)
+	
 	filename := fmt.Sprintf("clip_%d.mp3", clip.ID)
 	outputPath := filepath.Join(p.storageDir, filename)
 
+	// Step 1: Download video with precise cut
 	args := []string{
-		"-x",
-		"--audio-format", "mp3",
+		"-f", "bv*+ba*[ext=m4a]/b[ext=mp4]",
+		"--merge-output-format", "mp4",
 		"--download-sections", fmt.Sprintf("*%d-%d", clip.StartTime, clip.EndTime),
-		"-o", outputPath,
+		"-o", tempVideoPath,
 		clip.OriginalURL,
 	}
 
@@ -141,6 +145,24 @@ func (p *YTDLPProcessor) downloadAudio(ctx context.Context, clip *entities.Clip)
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
+
+	// Step 2: Extract audio from the cut video using ffmpeg
+	ffmpegArgs := []string{
+		"-i", tempVideoPath,
+		"-vn",
+		"-acodec", "libmp3lame",
+		"-q:a", "2",
+		outputPath,
+	}
+
+	ffmpegCmd := exec.CommandContext(ctx, "ffmpeg", ffmpegArgs...)
+	if err := ffmpegCmd.Run(); err != nil {
+		os.Remove(tempVideoPath)
+		return "", err
+	}
+
+	// Step 3: Clean up temporary video file
+	os.Remove(tempVideoPath)
 
 	return outputPath, nil
 }

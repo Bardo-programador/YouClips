@@ -6,6 +6,7 @@ API para criar clips de vídeos do YouTube feito em Golang.
 
 - Go 1.25+
 - yt-dlp instalado no sistema
+- ffmpeg instalado no sistema (usado pelo yt-dlp e para conversão de áudio)
 - SQLite3
 
 ## Instalação
