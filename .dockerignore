@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+**/*_test.go
+
+# Build artifacts
+dist/
+build/
+
+# Database files (will be in volumes)
+*.db
+*.db-shm
+*.db-wal
+
+# Storage
+storage/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+web/node_modules/
+web/.svelte-kit/
+web/build/
+web/.vscode/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
