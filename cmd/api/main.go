@@ -61,13 +61,30 @@ func main() {
 	cleanupWorker := service.NewCleanupWorker(clipRepo, storageDir, 1*time.Minute)
 	go cleanupWorker.Start(context.Background())
 
-	http.HandleFunc("/clips", clipHandler.Clips)
-	http.HandleFunc("/clips/", clipHandler.ClipByID)
-	http.HandleFunc("/metadata", clipHandler.ClipMetaData)
+	// Wrap handlers with CORS middleware
+	http.HandleFunc("/clips", corsMiddleware(clipHandler.Clips))
+	http.HandleFunc("/clips/", corsMiddleware(clipHandler.ClipByID))
+	http.HandleFunc("/metadata", corsMiddleware(clipHandler.ClipMetaData))
 
 	log.Printf("Starting server on %s%s with DB at %s, storage at %s, clip TTL %d minutes", SERVER_URL, SERVER_ADDR, dbPath, storageDir, clipTTL)
 	if err := http.ListenAndServe(SERVER_ADDR, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
+	}
+}
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Max-Age", "3600")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
 	}
 }
 
