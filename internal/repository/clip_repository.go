@@ -15,6 +15,7 @@ type ClipRepository interface {
 	UpdateStatus(ctx context.Context, id int, status entities.ClipStatus) error
 	Update(ctx context.Context, clip *entities.Clip) error
 	Delete(ctx context.Context, id int) (bool, error)
+	FindExpiredClips(ctx context.Context) ([]*entities.Clip, error)
 }
 
 type SQLiteClipRepository struct {
@@ -27,8 +28,8 @@ func NewSQLiteClipRepository(db *sql.DB) *SQLiteClipRepository {
 
 func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) error {
 	query := `
-		INSERT INTO clips (created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO clips (created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	
 	result, err := r.db.ExecContext(
 		ctx, query,
@@ -42,6 +43,7 @@ func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) 
 		clip.FilePath,
 		clip.OriginalURL,
 		clip.Status,
+		clip.ExpiresAt,
 	)
 	if err != nil {
 		return err
@@ -57,7 +59,7 @@ func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) 
 
 func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.Clip, error) {
 	query := `
-		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status
+		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at
 		FROM clips
 		WHERE id = ?`
 	
@@ -74,6 +76,7 @@ func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.C
 		&clip.FilePath,
 		&clip.OriginalURL,
 		&clip.Status,
+		&clip.ExpiresAt,
 	)
 	
 	if err == sql.ErrNoRows {
@@ -85,7 +88,7 @@ func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.C
 
 func (r *SQLiteClipRepository) List(ctx context.Context, limit, offset int) ([]*entities.Clip, error) {
 	query := `
-		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status
+		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at
 		FROM clips
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?`
@@ -111,6 +114,7 @@ func (r *SQLiteClipRepository) List(ctx context.Context, limit, offset int) ([]*
 			&clip.FilePath,
 			&clip.OriginalURL,
 			&clip.Status,
+			&clip.ExpiresAt,
 		)
 		if err != nil {
 			return nil, err
@@ -137,7 +141,7 @@ func (r *SQLiteClipRepository) UpdateStatus(ctx context.Context, id int, status 
 func (r *SQLiteClipRepository) Update(ctx context.Context, clip *entities.Clip) error {
 	query := `
 		UPDATE clips 
-		SET title = ?, size = ?, file_path = ?, status = ?
+		SET title = ?, size = ?, file_path = ?, status = ?, expires_at = ?
 		WHERE id = ?`
 	
 	_, err := r.db.ExecContext(
@@ -146,6 +150,7 @@ func (r *SQLiteClipRepository) Update(ctx context.Context, clip *entities.Clip) 
 		clip.Size,
 		clip.FilePath,
 		clip.Status,
+		clip.ExpiresAt,
 		clip.ID,
 	)
 	return err
@@ -162,4 +167,42 @@ func (r *SQLiteClipRepository) Delete(ctx context.Context, id int) (bool, error)
 		return false, err
 	}
 	return rowsAffected > 0, nil
+}
+
+func (r *SQLiteClipRepository) FindExpiredClips(ctx context.Context) ([]*entities.Clip, error) {
+	query := `
+		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at
+		FROM clips
+		WHERE status = ? AND expires_at IS NOT NULL AND expires_at <= ?`
+	
+	rows, err := r.db.QueryContext(ctx, query, entities.StatusCompleted, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var clips []*entities.Clip
+	for rows.Next() {
+		clip := &entities.Clip{}
+		err := rows.Scan(
+			&clip.ID,
+			&clip.CreatedAt,
+			&clip.Title,
+			&clip.StartTime,
+			&clip.EndTime,
+			&clip.DurationSeconds,
+			&clip.Format,
+			&clip.Size,
+			&clip.FilePath,
+			&clip.OriginalURL,
+			&clip.Status,
+			&clip.ExpiresAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		clips = append(clips, clip)
+	}
+	
+	return clips, rows.Err()
 } 

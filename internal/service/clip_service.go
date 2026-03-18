@@ -112,3 +112,6 @@ func (s *ClipService) DeleteClip(ctx context.Context, id int) (bool, error) {
 	}
 	return deleted, nil
 }
+
+
+

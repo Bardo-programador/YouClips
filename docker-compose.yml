@@ -1,0 +1,49 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: youclips-api
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist database
+      - ./data:/app/data
+      # Temporary storage for clips (will be auto-cleaned)
+      - clips-storage:/app/storage/clips
+    environment:
+      - DB_PATH=/app/data/youclips.db
+      - STORAGE_DIR=/app/storage/clips
+      - CLIP_TTL_MINUTES=5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/clips"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: youclips-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - ORIGIN=http://localhost:3000
+      - API_URL=http://api:8080
+    depends_on:
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  clips-storage:
+    driver: local

@@ -8,6 +8,7 @@ const (
 	StatusProcessing ClipStatus = "processing"
 	StatusCompleted  ClipStatus = "completed"
 	StatusFailed     ClipStatus = "failed"
+	StatusExpired    ClipStatus = "expired"
 )
 
 type ClipFormat string
@@ -29,4 +30,13 @@ type Clip struct {
 	FilePath        string     `json:"file_path"`
 	OriginalURL     string     `json:"original_url"`
 	Status          ClipStatus `json:"status"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+}
+
+type VideoMetadata struct {
+	ID        int       `json:"id"`
+	URL       string    `json:"url"`
+	Title     string    `json:"title"`
+	Duration  int       `json:"duration"`
+	CreatedAt time.Time `json:"created_at"`
 }

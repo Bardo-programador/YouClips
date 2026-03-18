@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"youclips/internal/entities"
@@ -176,8 +177,19 @@ func (h *ClipHandler) downloadClip(w http.ResponseWriter, r *http.Request, id in
 		return
 	}
 
+	if clip.Status == entities.StatusExpired {
+		http.Error(w, "Clip has expired. Please create a new clip.", http.StatusGone)
+		return
+	}
+
 	if clip.Status != entities.StatusCompleted {
 		http.Error(w, "Clip not ready for download", http.StatusBadRequest)
+		return
+	}
+
+	// Check if file still exists
+	if _, err := os.Stat(clip.FilePath); os.IsNotExist(err) {
+		http.Error(w, "Clip file not found. It may have expired.", http.StatusGone)
 		return
 	}
 
@@ -200,34 +212,33 @@ func (h *ClipHandler) downloadClip(w http.ResponseWriter, r *http.Request, id in
 	http.ServeFile(w, r, clip.FilePath)
 }
 
-func (h *ClipHandler) GetVideoMetadata(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+
+func (h *ClipHandler) ClipMetaData(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		var req entities.VideoMetadataRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.URL == "" {
+			http.Error(w, "URL is required", http.StatusBadRequest)
+			return
+		}
+
+		url := req.URL
+
+		metadata, err := h.service.GetVideoMetadata(r.Context(), url)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(metadata)
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-
-	var req entities.VideoMetadataRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.URL == "" {
-		http.Error(w, "URL is required", http.StatusBadRequest)
-		return
-	}
-
-	metadata, err := h.service.GetVideoMetadata(r.Context(), req.URL)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	response := entities.VideoMetadataResponse{
-		Title:    metadata.Title,
-		Duration: metadata.Duration,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
 }
+
+

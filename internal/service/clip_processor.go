@@ -8,19 +8,24 @@ import (
 	"path/filepath"
 	"strings"
 	"strconv"
+	"time"
 	"youclips/internal/entities"
 	"youclips/internal/repository"
 )
 
 type YTDLPProcessor struct {
-	repo       repository.ClipRepository
-	storageDir string
+	repo           repository.ClipRepository
+	metadataRepo   repository.MetadataRepository
+	storageDir     string
+	clipTTL        time.Duration
 }
 
-func NewYTDLPProcessor(repo repository.ClipRepository, storageDir string) *YTDLPProcessor {
+func NewYTDLPProcessor(repo repository.ClipRepository, metadataRepo repository.MetadataRepository, storageDir string, clipTTL time.Duration) *YTDLPProcessor {
 	return &YTDLPProcessor{
-		repo:       repo,
-		storageDir: storageDir,
+		repo:         repo,
+		storageDir:   storageDir,
+		metadataRepo: metadataRepo,
+		clipTTL:      clipTTL,
 	}
 }
 
@@ -60,9 +65,13 @@ func (p *YTDLPProcessor) ProcessClip(ctx context.Context, clip *entities.Clip) e
 	if err != nil {
 		return fmt.Errorf("failed to get file info: %w", err)
 	}
+	
+	expiresAt := time.Now().Add(p.clipTTL)
+	
 	clip.FilePath = outputPath
 	clip.Size = fileInfo.Size()
 	clip.Status = entities.StatusCompleted
+	clip.ExpiresAt = &expiresAt
 
 	if err := p.repo.Update(ctx, clip); err != nil {
 		return fmt.Errorf("failed to update clip: %w", err)
@@ -166,20 +175,41 @@ func (p *YTDLPProcessor) downloadAudio(ctx context.Context, clip *entities.Clip)
 
 	return outputPath, nil
 }
-
 func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error) {
+	// Check if metadata exists in database
+	cached, err := p.metadataRepo.GetByURL(ctx, url)
+	if err == nil && cached != nil {
+		return &entities.VideoMetadataResponse{
+			Title:    cached.Title,
+			Duration: cached.Duration,
+		}, nil
+	}
+
+	// Metadata not found, fetch from YouTube
 	title, err := p.getVideoTitle(ctx, url)
 	if err != nil {
-	return nil, fmt.Errorf("failed to get video title: %w", err)
+		return nil, fmt.Errorf("failed to get video title: %w", err)
 	}
 
 	duration, err := p.getVideoDuration(ctx, url)
 	if err != nil {
-	return nil, fmt.Errorf("failed to get video duration: %w", err)
+		return nil, fmt.Errorf("failed to get video duration: %w", err)
+	}
+
+	// Save to database for future requests
+	metadata := &entities.VideoMetadata{
+		URL:      url,
+		Title:    title,
+		Duration: duration,
+	}
+	if err := p.metadataRepo.Create(ctx, metadata); err != nil {
+		// Log error but don't fail the request
+		fmt.Printf("Warning: failed to cache metadata: %v\n", err)
 	}
 
 	return &entities.VideoMetadataResponse{
-	Title:    title,
-	Duration: duration,
+		Title:    title,
+		Duration: duration,
 	}, nil
 }
+
