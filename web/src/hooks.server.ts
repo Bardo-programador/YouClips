@@ -3,11 +3,17 @@ import type { Handle } from '@sveltejs/kit';
 const API_URL = process.env.API_URL || 'http://api:8080';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Proxy /api/* requests to the backend
-	if (event.url.pathname.startsWith('/api/')) {
-		const path = event.url.pathname.slice(4); // Remove /api prefix
+	// Proxy /api/* and /clips* requests to the backend
+	if (event.url.pathname.startsWith('/api/') || event.url.pathname.startsWith('/clips')) {
+		let path = event.url.pathname;
+		
+		// Remove /api prefix if present
+		if (path.startsWith('/api/')) {
+			path = path.slice(4);
+		}
+		
 		const queryString = event.url.search;
-		const url = `${API_URL}/${path}${queryString}`;
+		const url = `${API_URL}${path}${queryString}`;
 
 		try {
 			const response = await fetch(url, {

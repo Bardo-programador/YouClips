@@ -12,7 +12,14 @@
 		download_url?: string;
 	}
 
+	interface Progress {
+		id: number;
+		status: string;
+		progress: number;
+	}
+
 	let clip: Clip | null = null;
+	let progress: Progress | null = null;
 	let loading = true;
 	let error = '';
 	let deleting = false;
@@ -68,14 +75,32 @@
 
 		try {
 			const id = $page.params.id;
-			const response = await fetch(`/api/clips/${id}`);
+			const response = await fetch(`/clips/${id}`);
 			if (!response.ok) throw new Error('Clip não encontrado');
 
-			clip = await response.json();
+			const data = await response.json();
+			clip = { ...data }; // Force reactivity update
 		} catch (e: any) {
 			error = e.message;
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function fetchProgress() {
+		try {
+			const id = $page.params.id;
+			const response = await fetch(`/clips/${id}/progress`);
+			if (!response.ok) {
+				progress = null;
+				return;
+			}
+
+			const data = await response.json();
+			progress = { ...data }; // Force reactivity update
+		} catch (e: any) {
+			console.error('Failed to fetch progress:', e);
+			progress = null;
 		}
 	}
 
@@ -84,13 +109,13 @@
 
 		deleting = true;
 		try {
-			const response = await fetch(`/api/clips/${clip.id}`, {
+			const response = await fetch(`/clips/${clip.id}`, {
 				method: 'DELETE'
 			});
 
 			if (!response.ok) throw new Error('Falha ao apagar clip');
 
-			goto('/clips'); // Redireciona para lista
+			goto('/');
 		} catch (e: any) {
 			error = e.message;
 			deleting = false;
@@ -99,25 +124,32 @@
 
 	onMount(() => {
 		fetchClip();
+		fetchProgress();
 
-		// Auto-refresh se estiver processando
-		const interval = setInterval(() => {
+		const interval = setInterval(async () => {
+			await fetchClip();
+			
+			// Only fetch progress if still processing
 			if (clip?.status === 'processing') {
-				fetchClip();
+				await fetchProgress();
+			} else {
+				clearInterval(interval);
 			}
-		}, 3000);
+		}, 1500);
 
-		return () => clearInterval(interval);
+		return () => {
+			clearInterval(interval);
+		};
 	});
 </script>
 
 <div class="container mx-auto p-8 max-w-2xl">
 	<div class="mb-6">
-		<a href="/clips" class="text-blue-600 hover:text-blue-800 flex items-center gap-2">
+		<a href="/" class="text-blue-600 hover:text-blue-800 flex items-center gap-2">
 			<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
 			</svg>
-			Voltar para lista
+			Voltar
 		</a>
 	</div>
 
@@ -162,6 +194,22 @@
 			</div>
 
 			<div class="space-y-4">
+				<!-- Progress Bar (only for processing) -->
+				{#if clip.status === 'processing' && progress}
+					<div class="space-y-2">
+						<div class="flex justify-between items-center">
+							<span class="text-sm font-medium text-gray-700">Progresso do Processamento</span>
+							<span class="text-sm font-bold text-blue-600">{progress.progress}%</span>
+						</div>
+						<div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+							<div
+								class="bg-blue-600 h-full transition-all duration-500"
+								style="width: {progress.progress}%"
+							></div>
+						</div>
+					</div>
+				{/if}
+
 				<div class="grid grid-cols-2 gap-4">
 					<div class="p-4 bg-gray-50 rounded-lg">
 						<p class="text-sm text-gray-600 mb-1">Duração</p>
@@ -178,7 +226,7 @@
 
 				{#if clip.status === 'completed' && clip.download_url}
 					<a
-						href={clip.download_url.replace('/clips/', '/api/clips/')}
+						href={clip.download_url}
 						download
 						class="w-full block text-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
 					>

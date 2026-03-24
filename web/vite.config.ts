@@ -10,6 +10,10 @@ export default defineConfig({
 				target: process.env.API_URL || 'http://api:8080',
 				changeOrigin: true,
 				rewrite: (path) => path.replace(/^\/api/, '')
+			},
+			'/clips': {
+				target: process.env.API_URL || 'http://api:8080',
+				changeOrigin: true
 			}
 		}
 	}
