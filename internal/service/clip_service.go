@@ -10,26 +10,28 @@ import (
 
 type ClipService struct {
 	repo      repository.ClipRepository
-	processor ClipProcessor
+	processor *YTDLPProcessor // Changed from interface to concrete type
 }
 
-type ClipProcessor interface {
-	ProcessClip(ctx context.Context, clip *entities.Clip) error
-	GetVideoMetadata(ctx context.Context, url string) (*entities.VideoMetadataResponse, error)
-}
-
-
-
-func NewClipService(repo repository.ClipRepository, processor ClipProcessor) *ClipService {
+func NewClipService(repo repository.ClipRepository , processor *YTDLPProcessor) *ClipService {
 	return &ClipService{
 		repo:      repo,
 		processor: processor,
 	}
 }
 
-func (s *ClipService) CreateClip(ctx context.Context, url string, startTime, endTime int, format entities.ClipFormat) (*entities.Clip, error) {
+func (s *ClipService) CreateClip(ctx context.Context, url string, startTime, endTime int, format entities.ClipFormat, quality string) (*entities.Clip, error) {
 	if startTime < 0 || endTime < 0 || endTime <= startTime {
 		return nil, fmt.Errorf("invalid time range: start=%d, end=%d", startTime, endTime)
+	}
+
+	// Set default quality if not provided
+	if quality == "" {
+		if format == entities.FormatVideo {
+			quality = "720p" // Default video quality
+		} else {
+			quality = "240p" // For audio, use 240p video source
+		}
 	}
 
 	clip := &entities.Clip{
@@ -38,6 +40,7 @@ func (s *ClipService) CreateClip(ctx context.Context, url string, startTime, end
 		EndTime:         endTime,
 		DurationSeconds: endTime - startTime,
 		Format:          format,
+		Quality:         quality,
 		Status:          entities.StatusProcessing,
 	}
 
@@ -99,19 +102,42 @@ func (s *ClipService) DeleteClip(ctx context.Context, id int) (bool, error) {
 		return false, fmt.Errorf("failed to get clip: %w", err)
 	}
 
+	// If clip is still processing, cancel the download and delete .part files immediately
+	if clip.Status == entities.StatusProcessing {
+		s.processor.CancelDownload(id)
+		
+		// Delete .part files immediately
+		if clip.FilePath != "" {
+			os.Remove(clip.FilePath + ".part")
+			if clip.Format == entities.FormatAudio {
+				// For audio, also remove .webm.part
+				basePath := clip.FilePath[:len(clip.FilePath)-4]
+				os.Remove(basePath + ".webm.part")
+			}
+		}
+	}
+
 	deleted, err := s.repo.Delete(ctx, id)
 	if err != nil {
 		return false, fmt.Errorf("failed to delete clip: %w", err)
 	}
 	 
 	if deleted && clip.FilePath != "" {
-		if err := os.Remove(clip.FilePath); err != nil {
-			return false, fmt.Errorf("failed to delete clip file: %w", err)
-		}
-
+		// Delete the final file if it exists
+		os.Remove(clip.FilePath)
 	}
 	return deleted, nil
 }
 
-
+func (s *ClipService) GetClipSize(ctx context.Context, id int) (int64, error) {
+	clip, err := s.repo.GetByID(ctx, id)
+	if err != nil || clip == nil {
+		return 0, fmt.Errorf("failed to get clip: %w", err)
+	}
+	fileInfo, err := os.Stat(clip.FilePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get clip file size: %w", err)
+	}
+	return fileInfo.Size(), nil
+}
 

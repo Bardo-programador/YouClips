@@ -95,7 +95,8 @@ func initDatabase(db *sql.DB) error {
 	tableExists := err == nil
 
 	if !tableExists {
-		// Create table with all columns including expires_at
+		// Create table with all columns including expires_at, quality, and expected_size
+		// Note: progress is NOT stored - it's calculated on-demand
 		schema := `
 		CREATE TABLE clips (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +106,9 @@ func initDatabase(db *sql.DB) error {
 			end_time INTEGER NOT NULL,
 			duration_seconds INTEGER NOT NULL,
 			format TEXT NOT NULL,
+			quality TEXT NOT NULL DEFAULT '720p',
 			size INTEGER NOT NULL DEFAULT 0,
+			expected_size INTEGER NOT NULL DEFAULT 0,
 			file_path TEXT NOT NULL DEFAULT '',
 			original_url TEXT NOT NULL,
 			status TEXT NOT NULL,
@@ -119,15 +122,80 @@ func initDatabase(db *sql.DB) error {
 			return err
 		}
 	} else {
-		// Table exists, check if expires_at column exists
-		var columnExists bool
-		err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='expires_at'").Scan(&columnExists)
-		if err == nil && !columnExists {
+		
+		// Check if expires_at column exists
+		var expiresAtExists bool
+		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='expires_at'").Scan(&expiresAtExists)
+		if err == nil && !expiresAtExists {
 			// Add expires_at column
 			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN expires_at DATETIME"); err != nil {
 				return err
 			}
 			log.Println("Added expires_at column to clips table")
+		}
+		
+		// Check if quality column exists
+		var qualityExists bool
+		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='quality'").Scan(&qualityExists)
+		if err == nil && !qualityExists {
+			// Add quality column
+			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN quality TEXT NOT NULL DEFAULT '720p'"); err != nil {
+				log.Println("Warning: could not add quality column:", err)
+			} else {
+				log.Println("Added quality column to clips table")
+			}
+		}
+		
+		// Check if expected_size column exists
+		var expectedSizeExists bool
+		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='expected_size'").Scan(&expectedSizeExists)
+		if err == nil && !expectedSizeExists {
+			// Add expected_size column
+			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN expected_size INTEGER NOT NULL DEFAULT 0"); err != nil {
+				log.Println("Warning: could not add expected_size column:", err)
+			} else {
+				log.Println("Added expected_size column to clips table")
+			}
+		}
+		
+		// Remove progress column if it exists (progress is now calculated on-demand)
+		var progressExists bool
+		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='progress'").Scan(&progressExists)
+		if err == nil && progressExists {
+			// SQLite doesn't support DROP COLUMN in older versions, so we need to recreate the table
+			log.Println("Removing progress column from clips table (recreating table)...")
+			
+			// Create new table without progress column
+			recreateSchema := `
+			CREATE TABLE clips_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				created_at DATETIME NOT NULL,
+				title TEXT NOT NULL DEFAULT '',
+				start_time INTEGER NOT NULL,
+				end_time INTEGER NOT NULL,
+				duration_seconds INTEGER NOT NULL,
+				format TEXT NOT NULL,
+				quality TEXT NOT NULL DEFAULT '720p',
+				size INTEGER NOT NULL DEFAULT 0,
+				expected_size INTEGER NOT NULL DEFAULT 0,
+				file_path TEXT NOT NULL DEFAULT '',
+				original_url TEXT NOT NULL,
+				status TEXT NOT NULL,
+				expires_at DATETIME
+			);
+			INSERT INTO clips_new SELECT id, created_at, title, start_time, end_time, duration_seconds, format, quality, size, expected_size, file_path, original_url, status, expires_at FROM clips;
+			DROP TABLE clips;
+			ALTER TABLE clips_new RENAME TO clips;
+			CREATE INDEX idx_clips_status ON clips(status);
+			CREATE INDEX idx_clips_created_at ON clips(created_at DESC);
+			CREATE INDEX idx_clips_expires_at ON clips(expires_at);
+			`
+			
+			if _, err := db.Exec(recreateSchema); err != nil {
+				log.Println("Warning: could not remove progress column:", err)
+			} else {
+				log.Println("Successfully removed progress column from clips table")
+			}
 		}
 		
 		// Ensure indexes exist
@@ -143,6 +211,18 @@ func initDatabase(db *sql.DB) error {
 		url TEXT NOT NULL UNIQUE,
 		title TEXT NOT NULL,
 		duration INTEGER NOT NULL,
+		duration_string TEXT,
+		channel TEXT,
+		channel_url TEXT,
+		uploader TEXT,
+		uploader_id TEXT,
+		upload_date TEXT,
+		thumbnail TEXT,
+		categories TEXT,
+		ext TEXT,
+		filesize_approx INTEGER,
+		formats TEXT,
+		webpage_url TEXT,
 		created_at DATETIME NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_video_metadata_url ON video_metadata(url);
@@ -150,6 +230,38 @@ func initDatabase(db *sql.DB) error {
 	if _, err := db.Exec(metadataSchema); err != nil {
 		return err
 	}
+
+	// Check and add new columns to existing video_metadata table if they don't exist
+	newColumns := []struct {
+		name       string
+		definition string
+	}{
+		{"duration_string", "TEXT"},
+		{"channel", "TEXT"},
+		{"channel_url", "TEXT"},
+		{"uploader", "TEXT"},
+		{"uploader_id", "TEXT"},
+		{"upload_date", "TEXT"},
+		{"thumbnail", "TEXT"},
+		{"categories", "TEXT"},
+		{"ext", "TEXT"},
+		{"filesize_approx", "INTEGER"},
+		{"formats", "TEXT"},
+		{"webpage_url", "TEXT"},
+	}
+
+	for _, col := range newColumns {
+		var colExists bool
+		err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('video_metadata') WHERE name=?", col.name).Scan(&colExists)
+		if err == nil && !colExists {
+			alterSQL := "ALTER TABLE video_metadata ADD COLUMN " + col.name + " " + col.definition
+			if _, err := db.Exec(alterSQL); err != nil {
+				log.Printf("Warning: could not add %s column to video_metadata: %v", col.name, err)
+			} else {
+				log.Printf("Added %s column to video_metadata table", col.name)
+			}
+		}
+}
 
 	return nil
 }

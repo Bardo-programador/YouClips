@@ -28,8 +28,8 @@ func NewSQLiteClipRepository(db *sql.DB) *SQLiteClipRepository {
 
 func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) error {
 	query := `
-		INSERT INTO clips (created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO clips (created_at, title, start_time, end_time, duration_seconds, format, quality, size, expected_size, file_path, original_url, status, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	
 	result, err := r.db.ExecContext(
 		ctx, query,
@@ -39,7 +39,9 @@ func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) 
 		clip.EndTime,
 		clip.DurationSeconds,
 		clip.Format,
+		clip.Quality,
 		clip.Size,
+		clip.ExpectedSize,
 		clip.FilePath,
 		clip.OriginalURL,
 		clip.Status,
@@ -59,7 +61,7 @@ func (r *SQLiteClipRepository) Create(ctx context.Context, clip *entities.Clip) 
 
 func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.Clip, error) {
 	query := `
-		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at
+		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, quality, size, expected_size, file_path, original_url, status, expires_at
 		FROM clips
 		WHERE id = ?`
 	
@@ -72,7 +74,9 @@ func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.C
 		&clip.EndTime,
 		&clip.DurationSeconds,
 		&clip.Format,
+		&clip.Quality,
 		&clip.Size,
+		&clip.ExpectedSize,
 		&clip.FilePath,
 		&clip.OriginalURL,
 		&clip.Status,
@@ -88,7 +92,7 @@ func (r *SQLiteClipRepository) GetByID(ctx context.Context, id int) (*entities.C
 
 func (r *SQLiteClipRepository) List(ctx context.Context, limit, offset int) ([]*entities.Clip, error) {
 	query := `
-		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, size, file_path, original_url, status, expires_at
+		SELECT id, created_at, title, start_time, end_time, duration_seconds, format, quality, size, expected_size, file_path, original_url, status, expires_at
 		FROM clips
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?`
@@ -110,7 +114,9 @@ func (r *SQLiteClipRepository) List(ctx context.Context, limit, offset int) ([]*
 			&clip.EndTime,
 			&clip.DurationSeconds,
 			&clip.Format,
+			&clip.Quality,
 			&clip.Size,
+			&clip.ExpectedSize,
 			&clip.FilePath,
 			&clip.OriginalURL,
 			&clip.Status,
@@ -141,13 +147,14 @@ func (r *SQLiteClipRepository) UpdateStatus(ctx context.Context, id int, status 
 func (r *SQLiteClipRepository) Update(ctx context.Context, clip *entities.Clip) error {
 	query := `
 		UPDATE clips 
-		SET title = ?, size = ?, file_path = ?, status = ?, expires_at = ?
+		SET title = ?, size = ?, expected_size = ?, file_path = ?, status = ?, expires_at = ?
 		WHERE id = ?`
 	
 	_, err := r.db.ExecContext(
 		ctx, query,
 		clip.Title,
 		clip.Size,
+		clip.ExpectedSize,
 		clip.FilePath,
 		clip.Status,
 		clip.ExpiresAt,
