@@ -2,39 +2,68 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-	_ "github.com/mattn/go-sqlite3"
 	"youclips/internal/controller"
 	"youclips/internal/repository"
 	"youclips/internal/service"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	defaultDBPath       = "./youclips.db"
 	defaultStorageDir   = "./storage/clips"
 	defaultClipTTL      = 5 // minutes
 	SERVER_ADDR         = ":8080"
 	SERVER_URL					= "http://localhost"
+	USER								= "user"
+	PASSWORD						= "password"
+	DATABASSE_NAME 			= "youclips"
+	DATABASE_URL				= "postgres://user:password@localhost/youclips?sslmode=disable"
 )
 
-func main() {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = defaultDBPath
-	}
-
-	db, err := sql.Open("sqlite3", dbPath)
+func configPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		return nil, err
 	}
-	defer db.Close()
 
-	if err := initDatabase(db); err != nil {
+	config.MaxConns = 25
+	config.MinConns = 5
+	config.MaxConnLifetime = 5 * time.Minute
+	config.MaxConnIdleTime = 10 * time.Second
+	config.HealthCheckPeriod = 1 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		return nil, err
+	}
+
+	return pool, nil
+}
+
+func main() {
+	ctx := context.Background()
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = DATABASE_URL
+	}
+
+	pool, err := configPool(ctx, dbURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize database pool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := repository.InitPostgresDatabase(ctx, pool); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
@@ -51,22 +80,22 @@ func main() {
 	}
 	clipTTLDuration := time.Duration(clipTTL) * time.Minute
 
-	clipRepo := repository.NewSQLiteClipRepository(db)
-	metadataRepo := repository.NewSQLiteMetadataRepository(db)
+	clipRepo := repository.NewPostgresClipRepository(pool)
+	metadataRepo := repository.NewPostgresMetadataRepository(pool)
 	processor := service.NewYTDLPProcessor(clipRepo, metadataRepo, storageDir, clipTTLDuration)
 	clipService := service.NewClipService(clipRepo, processor)
 	clipHandler := controller.NewClipHandler(clipService)
 
 	// Start cleanup worker to remove expired clips
 	cleanupWorker := service.NewCleanupWorker(clipRepo, storageDir, 1*time.Minute)
-	go cleanupWorker.Start(context.Background())
+	go cleanupWorker.Start(ctx)
 
 	// Wrap handlers with CORS middleware
 	http.HandleFunc("/clips", corsMiddleware(clipHandler.Clips))
 	http.HandleFunc("/clips/", corsMiddleware(clipHandler.ClipByID))
 	http.HandleFunc("/metadata", corsMiddleware(clipHandler.ClipMetaData))
 
-	log.Printf("Starting server on %s%s with DB at %s, storage at %s, clip TTL %d minutes", SERVER_URL, SERVER_ADDR, dbPath, storageDir, clipTTL)
+	log.Printf("Starting server on %s%s with storage at %s, clip TTL %d minutes", SERVER_URL, SERVER_ADDR, storageDir, clipTTL)
 	if err := http.ListenAndServe(SERVER_ADDR, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
@@ -86,182 +115,4 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
-}
-
-func initDatabase(db *sql.DB) error {
-	// Check if clips table exists
-	var tableName string
-	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='clips'").Scan(&tableName)
-	tableExists := err == nil
-
-	if !tableExists {
-		// Create table with all columns including expires_at, quality, and expected_size
-		// Note: progress is NOT stored - it's calculated on-demand
-		schema := `
-		CREATE TABLE clips (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			created_at DATETIME NOT NULL,
-			title TEXT NOT NULL DEFAULT '',
-			start_time INTEGER NOT NULL,
-			end_time INTEGER NOT NULL,
-			duration_seconds INTEGER NOT NULL,
-			format TEXT NOT NULL,
-			quality TEXT NOT NULL DEFAULT '720p',
-			size INTEGER NOT NULL DEFAULT 0,
-			expected_size INTEGER NOT NULL DEFAULT 0,
-			file_path TEXT NOT NULL DEFAULT '',
-			original_url TEXT NOT NULL,
-			status TEXT NOT NULL,
-			expires_at DATETIME
-		);
-		CREATE INDEX idx_clips_status ON clips(status);
-		CREATE INDEX idx_clips_created_at ON clips(created_at DESC);
-		CREATE INDEX idx_clips_expires_at ON clips(expires_at);
-		`
-		if _, err := db.Exec(schema); err != nil {
-			return err
-		}
-	} else {
-		
-		// Check if expires_at column exists
-		var expiresAtExists bool
-		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='expires_at'").Scan(&expiresAtExists)
-		if err == nil && !expiresAtExists {
-			// Add expires_at column
-			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN expires_at DATETIME"); err != nil {
-				return err
-			}
-			log.Println("Added expires_at column to clips table")
-		}
-		
-		// Check if quality column exists
-		var qualityExists bool
-		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='quality'").Scan(&qualityExists)
-		if err == nil && !qualityExists {
-			// Add quality column
-			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN quality TEXT NOT NULL DEFAULT '720p'"); err != nil {
-				log.Println("Warning: could not add quality column:", err)
-			} else {
-				log.Println("Added quality column to clips table")
-			}
-		}
-		
-		// Check if expected_size column exists
-		var expectedSizeExists bool
-		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='expected_size'").Scan(&expectedSizeExists)
-		if err == nil && !expectedSizeExists {
-			// Add expected_size column
-			if _, err := db.Exec("ALTER TABLE clips ADD COLUMN expected_size INTEGER NOT NULL DEFAULT 0"); err != nil {
-				log.Println("Warning: could not add expected_size column:", err)
-			} else {
-				log.Println("Added expected_size column to clips table")
-			}
-		}
-		
-		// Remove progress column if it exists (progress is now calculated on-demand)
-		var progressExists bool
-		err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('clips') WHERE name='progress'").Scan(&progressExists)
-		if err == nil && progressExists {
-			// SQLite doesn't support DROP COLUMN in older versions, so we need to recreate the table
-			log.Println("Removing progress column from clips table (recreating table)...")
-			
-			// Create new table without progress column
-			recreateSchema := `
-			CREATE TABLE clips_new (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				created_at DATETIME NOT NULL,
-				title TEXT NOT NULL DEFAULT '',
-				start_time INTEGER NOT NULL,
-				end_time INTEGER NOT NULL,
-				duration_seconds INTEGER NOT NULL,
-				format TEXT NOT NULL,
-				quality TEXT NOT NULL DEFAULT '720p',
-				size INTEGER NOT NULL DEFAULT 0,
-				expected_size INTEGER NOT NULL DEFAULT 0,
-				file_path TEXT NOT NULL DEFAULT '',
-				original_url TEXT NOT NULL,
-				status TEXT NOT NULL,
-				expires_at DATETIME
-			);
-			INSERT INTO clips_new SELECT id, created_at, title, start_time, end_time, duration_seconds, format, quality, size, expected_size, file_path, original_url, status, expires_at FROM clips;
-			DROP TABLE clips;
-			ALTER TABLE clips_new RENAME TO clips;
-			CREATE INDEX idx_clips_status ON clips(status);
-			CREATE INDEX idx_clips_created_at ON clips(created_at DESC);
-			CREATE INDEX idx_clips_expires_at ON clips(expires_at);
-			`
-			
-			if _, err := db.Exec(recreateSchema); err != nil {
-				log.Println("Warning: could not remove progress column:", err)
-			} else {
-				log.Println("Successfully removed progress column from clips table")
-			}
-		}
-		
-		// Ensure indexes exist
-		db.Exec("CREATE INDEX IF NOT EXISTS idx_clips_status ON clips(status)")
-		db.Exec("CREATE INDEX IF NOT EXISTS idx_clips_created_at ON clips(created_at DESC)")
-		db.Exec("CREATE INDEX IF NOT EXISTS idx_clips_expires_at ON clips(expires_at)")
-	}
-
-	// Create video_metadata table
-	metadataSchema := `
-	CREATE TABLE IF NOT EXISTS video_metadata (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		url TEXT NOT NULL UNIQUE,
-		title TEXT NOT NULL,
-		duration INTEGER NOT NULL,
-		duration_string TEXT,
-		channel TEXT,
-		channel_url TEXT,
-		uploader TEXT,
-		uploader_id TEXT,
-		upload_date TEXT,
-		thumbnail TEXT,
-		categories TEXT,
-		ext TEXT,
-		filesize_approx INTEGER,
-		formats TEXT,
-		webpage_url TEXT,
-		created_at DATETIME NOT NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_video_metadata_url ON video_metadata(url);
-	`
-	if _, err := db.Exec(metadataSchema); err != nil {
-		return err
-	}
-
-	// Check and add new columns to existing video_metadata table if they don't exist
-	newColumns := []struct {
-		name       string
-		definition string
-	}{
-		{"duration_string", "TEXT"},
-		{"channel", "TEXT"},
-		{"channel_url", "TEXT"},
-		{"uploader", "TEXT"},
-		{"uploader_id", "TEXT"},
-		{"upload_date", "TEXT"},
-		{"thumbnail", "TEXT"},
-		{"categories", "TEXT"},
-		{"ext", "TEXT"},
-		{"filesize_approx", "INTEGER"},
-		{"formats", "TEXT"},
-		{"webpage_url", "TEXT"},
-	}
-
-	for _, col := range newColumns {
-		var colExists bool
-		err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('video_metadata') WHERE name=?", col.name).Scan(&colExists)
-		if err == nil && !colExists {
-			alterSQL := "ALTER TABLE video_metadata ADD COLUMN " + col.name + " " + col.definition
-			if _, err := db.Exec(alterSQL); err != nil {
-				log.Printf("Warning: could not add %s column to video_metadata: %v", col.name, err)
-			} else {
-				log.Printf("Added %s column to video_metadata table", col.name)
-			}
-		}
-}
-
-	return nil
 }
