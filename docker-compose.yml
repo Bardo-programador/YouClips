@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: youclips-db
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=youclips
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d youclips"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -7,14 +25,15 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Persist database
-      - ./data:/app/data
       # Temporary storage for clips (will be auto-cleaned)
-      - clips-storage:/app/storage/clips
+      - ./storage:/app/storage
     environment:
-      - DB_PATH=/app/data/youclips.db
+      - DATABASE_URL=postgres://user:password@postgres:5432/youclips?sslmode=disable
       - STORAGE_DIR=/app/storage/clips
       - CLIP_TTL_MINUTES=5
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/clips"]
@@ -45,5 +64,5 @@ services:
       start_period: 10s
 
 volumes:
-  clips-storage:
+  postgres-data:
     driver: local
