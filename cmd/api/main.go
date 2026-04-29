@@ -91,7 +91,7 @@ func main() {
 	go cleanupWorker.Start(ctx)
 
 	// Wrap handlers with CORS middleware
-	http.HandleFunc("/clips", corsMiddleware(clipHandler.Clips))
+	// http.HandleFunc("/clips", corsMiddleware(clipHandler.Clips))
 	http.HandleFunc("/clips/", corsMiddleware(clipHandler.ClipByID))
 	http.HandleFunc("/metadata", corsMiddleware(clipHandler.ClipMetaData))
 
