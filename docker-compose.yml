@@ -24,12 +24,10 @@ services:
     container_name: youclips-api
     ports:
       - "8080:8080"
-    volumes:
-      # Temporary storage for clips (will be auto-cleaned)
-      - ./storage:/app/storage
+
     environment:
       - DATABASE_URL=postgres://user:password@postgres:5432/youclips?sslmode=disable
-      - STORAGE_DIR=/app/storage/clips
+      - STORAGE_DIR=/clips    
       - CLIP_TTL_MINUTES=5
     depends_on:
       postgres:
