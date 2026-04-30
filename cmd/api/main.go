@@ -15,14 +15,11 @@ import (
 )
 
 const (
-	defaultStorageDir   = "./storage/clips"
-	defaultClipTTL      = 5 // minutes
-	SERVER_ADDR         = ":8080"
-	SERVER_URL					= "http://localhost"
-	USER								= "user"
-	PASSWORD						= "password"
-	DATABASSE_NAME 			= "youclips"
-	DATABASE_URL				= "postgres://user:password@localhost/youclips?sslmode=disable"
+	defaultStorageDir       = "./storage/clips"
+	defaultClipTTL          = "5" // minutes
+	defaultServerAddr       = ":8080"
+	defaultServerURL        = "http://localhost"
+	defaultDatabaseURL      = "postgres://user:password@localhost/youclips?sslmode=disable"
 )
 
 func configPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
@@ -50,12 +47,33 @@ func configPool(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 }
 
 func main() {
-	ctx := context.Background()
 
+	// Load environment variables
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = DATABASE_URL
+		dbURL = defaultDatabaseURL
 	}
+
+	log.Printf("Using DATABASE_URL: %s", dbURL)
+
+	STORAGE_DIR := os.Getenv("STORAGE_DIR")
+	if STORAGE_DIR == "" {
+		STORAGE_DIR = defaultStorageDir
+	}
+
+	CLIP_TTL := os.Getenv("CLIP_TTL_MINUTES")
+	if CLIP_TTL == "" {
+		CLIP_TTL = defaultClipTTL
+	}
+
+	// Get PORT from environment (Render sets this), fallback to 8080
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	serverAddr := ":" + port
+
+	ctx := context.Background()
 
 	pool, err := configPool(ctx, dbURL)
 	if err != nil {
@@ -67,36 +85,37 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	storageDir := os.Getenv("STORAGE_DIR")
-	if storageDir == "" {
-		storageDir = defaultStorageDir
+	if STORAGE_DIR == "" {
+		STORAGE_DIR = defaultStorageDir
 	}
 
-	clipTTL := defaultClipTTL
-	if ttlEnv := os.Getenv("CLIP_TTL_MINUTES"); ttlEnv != "" {
-		if ttl, err := strconv.Atoi(ttlEnv); err == nil && ttl > 0 {
-			clipTTL = ttl
-		}
+	if err := os.MkdirAll(STORAGE_DIR, os.ModePerm); err != nil {
+		log.Fatalf("Failed to create storage directory: %v", err)
 	}
-	clipTTLDuration := time.Duration(clipTTL) * time.Minute
+	
+	if CLIP_TTL == "" {
+		CLIP_TTL = defaultClipTTL
+	}
+	clipTTL_int , err := strconv.Atoi(CLIP_TTL)
+	clipTTLDuration := time.Duration(clipTTL_int) * time.Minute
 
 	clipRepo := repository.NewPostgresClipRepository(pool)
 	metadataRepo := repository.NewPostgresMetadataRepository(pool)
-	processor := service.NewYTDLPProcessor(clipRepo, metadataRepo, storageDir, clipTTLDuration)
+	processor := service.NewYTDLPProcessor(clipRepo, metadataRepo, STORAGE_DIR, clipTTLDuration)
 	clipService := service.NewClipService(clipRepo, processor)
 	clipHandler := controller.NewClipHandler(clipService)
 
 	// Start cleanup worker to remove expired clips
-	cleanupWorker := service.NewCleanupWorker(clipRepo, storageDir, 1*time.Minute)
+	cleanupWorker := service.NewCleanupWorker(clipRepo, STORAGE_DIR, 1*time.Minute)
 	go cleanupWorker.Start(ctx)
 
 	// Wrap handlers with CORS middleware
 	// http.HandleFunc("/clips", corsMiddleware(clipHandler.Clips))
 	http.HandleFunc("/clips/", corsMiddleware(clipHandler.ClipByID))
 	http.HandleFunc("/metadata", corsMiddleware(clipHandler.ClipMetaData))
-
-	log.Printf("Starting server on %s%s with storage at %s, clip TTL %d minutes", SERVER_URL, SERVER_ADDR, storageDir, clipTTL)
-	if err := http.ListenAndServe(SERVER_ADDR, nil); err != nil {
+	
+	log.Printf("Starting server on %s with storage at %s, clip TTL %s minutes", serverAddr, STORAGE_DIR, CLIP_TTL)
+	if err := http.ListenAndServe(serverAddr, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
