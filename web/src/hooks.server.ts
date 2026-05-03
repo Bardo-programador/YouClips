@@ -1,8 +1,8 @@
 import type { Handle } from '@sveltejs/kit';
 
-const API_URL = process.env.API_URL || 'http://api:8080';
-
 export const handle: Handle = async ({ event, resolve }) => {
+	// Get API_URL at runtime (not build time) to support environment variable changes
+	const API_URL = process.env.API_URL || 'http://api:8080';
 	// Proxy /api/* and /clips* requests to the backend
 	if (event.url.pathname.startsWith('/api/') || event.url.pathname.startsWith('/clips')) {
 		let path = event.url.pathname;
