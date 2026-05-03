@@ -9,7 +9,7 @@
 	let loading = false;
 	let loadingMetadata = false;
 	let error = '';
-	let metadata: { title: string; duration: number } | null = null;
+	let metadata: { title: string; duration: number; max_quality: string } | null = null;
 
 	// Quality options for video
 	const videoQualities = [
@@ -50,11 +50,26 @@
 			// Reset sliders to video range
 			startTime = 0;
 			endTime = Math.min(30, metadata.duration);
+			
+			// Reset quality to a safe value if current selection exceeds max available
+			if (metadata.max_quality && quality > metadata.max_quality) {
+				quality = metadata.max_quality;
+			}
 		} catch (e: any) {
 			error = e.message;
 		} finally {
 			loadingMetadata = false;
 		}
+	}
+
+	function isQualityAvailable(qualityValue: string): boolean {
+		if (!metadata?.max_quality) return true;
+		
+		const qualityOrder = ['240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'];
+		const maxIndex = qualityOrder.indexOf(metadata.max_quality);
+		const currentIndex = qualityOrder.indexOf(qualityValue);
+		
+		return currentIndex <= maxIndex;
 	}
 
 	async function createClip() {
@@ -201,12 +216,23 @@
 						class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
 					>
 						{#each videoQualities as q}
-							<option value={q.value}>{q.label}</option>
+							<option value={q.value} disabled={!isQualityAvailable(q.value)}>
+								{q.label}
+								{#if !isQualityAvailable(q.value)}
+									(não disponível)
+								{/if}
+							</option>
 						{/each}
 					</select>
-					<p class="mt-1 text-sm text-gray-500">
-						Maior qualidade = arquivo maior e processamento mais lento
-					</p>
+					{#if metadata?.max_quality}
+						<p class="mt-1 text-sm text-gray-500">
+							Qualidade máxima disponível: <strong>{metadata.max_quality}</strong>
+						</p>
+					{:else}
+						<p class="mt-1 text-sm text-gray-500">
+							Maior qualidade = arquivo maior e processamento mais lento
+						</p>
+					{/if}
 				</div>
 			{:else}
 				<div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
