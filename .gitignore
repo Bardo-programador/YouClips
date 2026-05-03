@@ -4,7 +4,7 @@ bin/
 # Databases and storage
 youclips.db
 videodownloader.db
-storage/clips/
+storage/
 
 # OS/editor junk
 .DS_Store
