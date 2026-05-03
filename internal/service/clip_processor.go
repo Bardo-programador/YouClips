@@ -233,6 +233,7 @@ func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*ent
 			Ext:            cached.Ext,
 			FilesizeApprox: cached.FilesizeApprox,
 			WebpageURL:     cached.WebpageURL,
+			MaxQuality:     cached.MaxQuality,
 			Formats:        formats,
 		}, nil
 	}
@@ -242,6 +243,9 @@ func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*ent
 	if err != nil {
 		return nil, fmt.Errorf("failed to get video metadata: %w", err)
 	}
+
+	// Calculate maximum quality from available formats
+	maxQuality := calculateMaxQuality(ytdlpMeta.Formats)
 
 	// Convert arrays to JSON strings for database storage
 	categoriesJSON, _ := json.Marshal(ytdlpMeta.Categories)
@@ -264,6 +268,7 @@ func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*ent
 		FilesizeApprox: ytdlpMeta.FilesizeApprox,
 		Formats:        string(formatsJSON),
 		WebpageURL:     ytdlpMeta.WebpageURL,
+		MaxQuality:     maxQuality,
 	}
 	
 	if err := p.metadataRepo.Create(ctx, metadata); err != nil {
@@ -285,7 +290,38 @@ func (p *YTDLPProcessor) GetVideoMetadata(ctx context.Context, url string) (*ent
 		Ext:            ytdlpMeta.Ext,
 		FilesizeApprox: ytdlpMeta.FilesizeApprox,
 		WebpageURL:     ytdlpMeta.WebpageURL,
+		MaxQuality:     maxQuality,
 		Formats:        ytdlpMeta.Formats,
 	}, nil
+}
+
+// calculateMaxQuality finds the maximum video quality from available formats
+func calculateMaxQuality(formats []entities.FormatInfo) string {
+	maxHeight := 0
+	for _, format := range formats {
+		if format.Height > maxHeight && format.Height > 0 {
+			maxHeight = format.Height
+		}
+	}
+
+	// Map height to quality label
+	switch {
+	case maxHeight >= 2160:
+		return "2160p"
+	case maxHeight >= 1440:
+		return "1440p"
+	case maxHeight >= 1080:
+		return "1080p"
+	case maxHeight >= 720:
+		return "720p"
+	case maxHeight >= 480:
+		return "480p"
+	case maxHeight >= 360:
+		return "360p"
+	case maxHeight >= 240:
+		return "240p"
+	default:
+		return "unknown"
+	}
 }
 

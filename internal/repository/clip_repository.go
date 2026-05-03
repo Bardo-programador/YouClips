@@ -375,6 +375,7 @@ func InitSQLiteDatabase(db *sql.DB) error {
 		{"filesize_approx", "INTEGER"},
 		{"formats", "TEXT"},
 		{"webpage_url", "TEXT"},
+		{"max_quality", "TEXT"},
 	}
 
 	for _, col := range newColumns {

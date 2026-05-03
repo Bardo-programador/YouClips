@@ -52,6 +52,7 @@ type VideoMetadata struct {
 	FilesizeApprox     int64     `json:"filesize_approx"`
 	Formats            string    `json:"formats"`          // JSON array stored as string
 	WebpageURL         string    `json:"webpage_url"`
+	MaxQuality         string    `json:"max_quality"`      // Maximum available quality (e.g., "1080p")
 	CreatedAt          time.Time `json:"created_at"`
 }
 

@@ -46,6 +46,7 @@ type VideoMetadataResponse struct {
 	Ext              string            `json:"ext"`
 	FilesizeApprox   int64             `json:"filesize_approx"`
 	WebpageURL       string            `json:"webpage_url"`
+	MaxQuality       string            `json:"max_quality"`
 	Formats          []FormatInfo      `json:"formats"`
 }
 
