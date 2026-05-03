@@ -31,7 +31,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 					: await event.request.text()
 			});
 
-			return new Response(response.body, {
+			// Properly handle response body as text to avoid truncation
+			const text = await response.text();
+			return new Response(text, {
 				status: response.status,
 				headers: response.headers
 			});
