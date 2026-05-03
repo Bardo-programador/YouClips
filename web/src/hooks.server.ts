@@ -31,11 +31,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 					: await event.request.text()
 			});
 
-			// Properly handle response body as text to avoid truncation
-			const text = await response.text();
-			return new Response(text, {
+			// Read entire response and return with proper headers
+			const buffer = await response.arrayBuffer();
+			const headers = new Headers(response.headers);
+			headers.set('Content-Length', buffer.byteLength.toString());
+			
+			return new Response(buffer, {
 				status: response.status,
-				headers: response.headers
+				headers
 			});
 		} catch (error) {
 			console.error('API proxy error:', error);
